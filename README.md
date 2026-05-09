@@ -83,3 +83,7 @@ mv price /usr/local/bin/
 ## Data source
 
 Prices are fetched live from [CryptoCompare](https://www.cryptocompare.com/), a free public API — no account or API key required.
+
+## License
+
+[MIT](LICENSE)

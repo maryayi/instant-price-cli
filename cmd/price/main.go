@@ -13,7 +13,7 @@ import (
 const apiURL = "https://min-api.cryptocompare.com/data/price?fsym=%s&tsyms=%s"
 
 var (
-	version    = "v0.2.0"
+	version    = "v0.3.0"
 	httpClient = &http.Client{Timeout: 10 * time.Second}
 )
 
