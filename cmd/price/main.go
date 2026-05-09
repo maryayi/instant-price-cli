@@ -9,34 +9,87 @@ import (
 	"time"
 )
 
-const apiURL = "https://min-api.cryptocompare.com/data/price?fsym=%s&tsyms=USD"
-
-type priceResponse struct {
-	USD      *float64 `json:"USD"`
-	Response string   `json:"Response"`
-	Message  string   `json:"Message"`
-}
+const apiURL = "https://min-api.cryptocompare.com/data/price?fsym=%s&tsyms=%s"
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "Usage: price <CRYPTO>")
+	symbol, currency, ok := parseArgs(os.Args[1:])
+	if !ok {
+		printUsage()
 		os.Exit(1)
 	}
 
-	symbol := strings.ToUpper(strings.TrimSpace(os.Args[1]))
-	price, err := fetchPrice(symbol)
+	price, err := fetchPrice(symbol, currency)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("%s: $%s\n", symbol, formatUSD(price))
+	fmt.Printf("%s: %s %s\n", symbol, formatAmount(price), currency)
 }
 
-func fetchPrice(symbol string) (float64, error) {
-	resp, err := httpClient.Get(fmt.Sprintf(apiURL, symbol))
+// parseArgs handles flags in any position. Returns (symbol, currency, ok).
+func parseArgs(args []string) (string, string, bool) {
+	currency := "USD"
+	var positional []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		// Extract flag name and optional inline value from -flag, --flag, -flag=val, --flag=val
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			positional = append(positional, arg)
+			continue
+		}
+
+		trimmed := strings.TrimLeft(arg, "-")
+		name, inlineVal, hasInline := strings.Cut(trimmed, "=")
+
+		switch name {
+		case "currency", "c":
+			var val string
+			if hasInline {
+				val = inlineVal
+			} else if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				val = args[i]
+			} else {
+				fmt.Fprintf(os.Stderr, "error: %s requires a currency code (e.g. EUR)\n", arg)
+				return "", "", false
+			}
+			if val == "" {
+				fmt.Fprintf(os.Stderr, "error: %s requires a non-empty currency code\n", arg)
+				return "", "", false
+			}
+			currency = strings.ToUpper(val)
+		default:
+			fmt.Fprintf(os.Stderr, "error: unknown flag %q\n", arg)
+			return "", "", false
+		}
+	}
+
+	if len(positional) != 1 {
+		return "", "", false
+	}
+
+	return strings.ToUpper(positional[0]), currency, true
+}
+
+func printUsage() {
+	fmt.Fprintln(os.Stderr, "Usage: price [-c CODE | --currency CODE] <CRYPTO>")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Options:")
+	fmt.Fprintln(os.Stderr, "  -c, --currency CODE   currency code for the price (default: USD)")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Examples:")
+	fmt.Fprintln(os.Stderr, "  price btc")
+	fmt.Fprintln(os.Stderr, "  price btc --currency EUR")
+	fmt.Fprintln(os.Stderr, "  price btc -c GBP")
+}
+
+func fetchPrice(symbol, currency string) (float64, error) {
+	resp, err := httpClient.Get(fmt.Sprintf(apiURL, symbol, currency))
 	if err != nil {
 		return 0, fmt.Errorf("network request failed: %w", err)
 	}
@@ -46,23 +99,24 @@ func fetchPrice(symbol string) (float64, error) {
 		return 0, fmt.Errorf("API error (HTTP %d)", resp.StatusCode)
 	}
 
-	var result priceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return 0, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
-	if result.Response == "Error" {
-		return 0, fmt.Errorf("%q not found — check the symbol and try again", symbol)
+	// Success path: the currency key is present when the request is valid.
+	if priceRaw, ok := raw[currency]; ok {
+		var price float64
+		if err := json.Unmarshal(priceRaw, &price); err != nil {
+			return 0, fmt.Errorf("invalid price data in API response")
+		}
+		return price, nil
 	}
 
-	if result.USD == nil {
-		return 0, fmt.Errorf("no price data returned for %q", symbol)
-	}
-
-	return *result.USD, nil
+	return 0, fmt.Errorf("no price found for %s/%s — check the symbol and currency code", symbol, currency)
 }
 
-func formatUSD(price float64) string {
+func formatAmount(price float64) string {
 	switch {
 	case price >= 1:
 		return withCommas(fmt.Sprintf("%.2f", price))

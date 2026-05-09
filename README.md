@@ -1,16 +1,16 @@
 # instant-price-cli
 
-A fast, zero-dependency CLI tool to get real-time cryptocurrency prices in USD.
+A fast, zero-dependency CLI tool to get real-time cryptocurrency prices in any currency.
 
 ```
 $ price btc
-BTC: $80,476.29
+BTC: 80,391.88 USD
 
-$ price eth
-ETH: $2,318.42
+$ price eth --currency EUR
+ETH: 2,105.43 EUR
 
-$ price doge
-DOGE: $0.110600
+$ price doge -c GBP
+DOGE: 0.094200 GBP
 ```
 
 ## Requirements
@@ -34,17 +34,29 @@ export PATH="$HOME/go/bin:$PATH"
 ## Usage
 
 ```
-price <CRYPTO>
+price [-c CODE | --currency CODE] <CRYPTO>
 ```
 
-The symbol is case-insensitive:
+The symbol and currency code are both case-insensitive.
+
+**Options:**
+
+| Flag | Shorthand | Default | Description |
+|------|-----------|---------|-------------|
+| `--currency` | `-c` | `USD` | Currency code to display the price in |
+
+**Examples:**
 
 ```sh
+# Default (USD)
 price btc
-price BTC
 price ETH
-price SOL
-price DOGE
+
+# Other currencies — flag can go before or after the symbol
+price btc --currency EUR
+price btc -c GBP
+price --currency JPY eth
+price -c=CAD sol
 ```
 
 ## Build from source
