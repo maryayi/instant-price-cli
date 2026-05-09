@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -16,7 +17,7 @@ const (
 )
 
 var (
-	version    = "v0.4.1"
+	version    = "v0.5.0"
 	httpClient = &http.Client{Timeout: 10 * time.Second}
 )
 
@@ -24,6 +25,7 @@ type opts struct {
 	symbol     string
 	currency   string
 	showChange bool
+	jsonOut    bool
 }
 
 type changes struct {
@@ -31,6 +33,20 @@ type changes struct {
 	week  float64
 	month float64
 	year  float64
+}
+
+type jsonResult struct {
+	Symbol   string      `json:"symbol"`
+	Currency string      `json:"currency"`
+	Price    float64     `json:"price"`
+	Change   *jsonChange `json:"change,omitempty"`
+}
+
+type jsonChange struct {
+	Day   float64 `json:"24h"`
+	Week  float64 `json:"7d"`
+	Month float64 `json:"30d"`
+	Year  float64 `json:"1y"`
 }
 
 func main() {
@@ -57,14 +73,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%s: %s %s\n", o.symbol, formatAmount(price), o.currency)
-
+	var ch *changes
 	if o.showChange {
-		ch, err := fetchChanges(o.symbol, o.currency, price)
+		c, err := fetchChanges(o.symbol, o.currency, price)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+		ch = &c
+	}
+
+	if o.jsonOut {
+		result := jsonResult{
+			Symbol:   o.symbol,
+			Currency: o.currency,
+			Price:    price,
+		}
+		if ch != nil {
+			r2 := func(f float64) float64 { return math.Round(f*100) / 100 }
+			result.Change = &jsonChange{
+				Day:   r2(ch.day),
+				Week:  r2(ch.week),
+				Month: r2(ch.month),
+				Year:  r2(ch.year),
+			}
+		}
+		out, _ := json.MarshalIndent(result, "", "  ")
+		fmt.Println(string(out))
+		return
+	}
+
+	fmt.Printf("%s: %s %s\n", o.symbol, formatAmount(price), o.currency)
+	if ch != nil {
 		fmt.Printf("  24h   %s\n", formatChange(ch.day))
 		fmt.Printf("  7d    %s\n", formatChange(ch.week))
 		fmt.Printf("  30d   %s\n", formatChange(ch.month))
@@ -99,6 +139,12 @@ func parseArgs(args []string) (opts, bool) {
 			o.showChange = true
 			if hasInline {
 				fmt.Fprintf(os.Stderr, "error: --change does not take a value\n")
+				return opts{}, false
+			}
+		case "json":
+			o.jsonOut = true
+			if hasInline {
+				fmt.Fprintf(os.Stderr, "error: --json does not take a value\n")
 				return opts{}, false
 			}
 		case "currency", "c":
@@ -137,6 +183,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  -c, --currency CODE   currency code for the price (default: USD)")
 	fmt.Fprintln(w, "      --change          show price change for 24h, 7d, 30d, and 1y")
+	fmt.Fprintln(w, "      --json            output results as JSON")
 	fmt.Fprintln(w, "  -v, --version         show version")
 	fmt.Fprintln(w, "  -h, --help            show this help message")
 	fmt.Fprintln(w, "")
@@ -144,6 +191,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  price btc")
 	fmt.Fprintln(w, "  price btc --currency EUR")
 	fmt.Fprintln(w, "  price btc -c GBP --change")
+	fmt.Fprintln(w, "  price btc --json")
+	fmt.Fprintln(w, "  price btc --change --json")
 }
 
 func fetchPrice(symbol, currency string) (float64, error) {

@@ -13,11 +13,25 @@ BTC: 80,259.82 USD
   30d  +11.78%
   1y   -22.06%
 
-$ price eth --currency EUR
-ETH: 2,105.43 EUR
+$ price btc --json
+{
+  "symbol": "BTC",
+  "currency": "USD",
+  "price": 80259.82
+}
 
-$ price doge -c GBP
-DOGE: 0.094200 GBP
+$ price btc --change --json
+{
+  "symbol": "BTC",
+  "currency": "USD",
+  "price": 80259.82,
+  "change": {
+    "24h": 0.08,
+    "7d": 2.01,
+    "30d": 11.78,
+    "1y": -22.06
+  }
+}
 ```
 
 ## Requirements
@@ -52,6 +66,7 @@ The symbol and currency code are both case-insensitive.
 |------|-----------|---------|-------------|
 | `--currency` | `-c` | `USD` | Currency code to display the price in |
 | `--change` | | | Show price change for 24h, 7d, 30d, and 1y |
+| `--json` | | | Output results as JSON |
 | `--version` | `-v` | | Show version |
 | `--help` | `-h` | | Show help message |
 
@@ -73,6 +88,11 @@ price -c=CAD sol
 # Show price change over multiple timeframes
 price btc --change
 price btc -c EUR --change
+
+# Output as JSON (combinable with other flags)
+price btc --json
+price btc --change --json
+price btc -c EUR --json
 
 # Help and version
 price --help
