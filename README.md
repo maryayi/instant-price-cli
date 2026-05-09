@@ -55,6 +55,8 @@ The symbol and currency code are both case-insensitive.
 | `--version` | `-v` | | Show version |
 | `--help` | `-h` | | Show help message |
 
+> **Note:** `--change` has no shorthand because `-c` is reserved for `--currency`.
+
 **Examples:**
 
 ```sh
