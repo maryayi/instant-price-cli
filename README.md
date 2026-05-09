@@ -4,7 +4,14 @@ A fast, zero-dependency CLI tool to get real-time cryptocurrency prices in any c
 
 ```
 $ price btc
-BTC: 80,391.88 USD
+BTC: 80,259.82 USD
+
+$ price btc --change
+BTC: 80,259.82 USD
+  24h   +0.08%
+  7d    +2.01%
+  30d  +11.78%
+  1y   -22.06%
 
 $ price eth --currency EUR
 ETH: 2,105.43 EUR
@@ -44,6 +51,7 @@ The symbol and currency code are both case-insensitive.
 | Flag | Shorthand | Default | Description |
 |------|-----------|---------|-------------|
 | `--currency` | `-c` | `USD` | Currency code to display the price in |
+| `--change` | | | Show price change for 24h, 7d, 30d, and 1y |
 | `--version` | `-v` | | Show version |
 | `--help` | `-h` | | Show help message |
 
@@ -59,6 +67,10 @@ price btc --currency EUR
 price btc -c GBP
 price --currency JPY eth
 price -c=CAD sol
+
+# Show price change over multiple timeframes
+price btc --change
+price btc -c EUR --change
 
 # Help and version
 price --help
