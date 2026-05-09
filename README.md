@@ -13,6 +13,22 @@ BTC: 80,259.82 USD
   30d  +11.78%
   1y   -22.06%
 
+$ price btc --graph w
+BTC: 80,259.82 USD
+BTC/USD — Last 7d
+81,722.22 ┤                                                            
+          ┤                              ╱╱╱╱╱╲                        
+80,954.78 ┤                        ╱╱╱╱╱╱      ╲╲                      
+          ┤                      ╱╱              ╲╲╲                   
+80,187.33 ┤                   ╱╱╱                   ╲╲─────────────────
+          ┤                ╱╱╱                                         
+79,419.89 ┤             ╱╱╱                                            
+          ┤          ╱╱╱                                               
+          ┤─────────╱                                                  
+78,268.72 └                                                            
+           ────────────────────────────────────────────────────────────
+          Sat     Sun              Tue              Thu             Sat
+
 $ price btc --json
 {
   "symbol": "BTC",
@@ -55,7 +71,7 @@ export PATH="$HOME/go/bin:$PATH"
 ## Usage
 
 ```
-price [-c CODE | --currency CODE] <CRYPTO>
+price [options] <CRYPTO>
 ```
 
 The symbol and currency code are both case-insensitive.
@@ -66,6 +82,7 @@ The symbol and currency code are both case-insensitive.
 |------|-----------|---------|-------------|
 | `--currency` | `-c` | `USD` | Currency code to display the price in |
 | `--change` | | | Show price change for 24h, 7d, 30d, and 1y |
+| `--graph PERIOD` | `-g` | | ASCII price chart: `d`=day, `w`=week, `m`=month, `y`=year |
 | `--json` | | | Output results as JSON |
 | `--version` | `-v` | | Show version |
 | `--help` | `-h` | | Show help message |
@@ -88,6 +105,12 @@ price -c=CAD sol
 # Show price change over multiple timeframes
 price btc --change
 price btc -c EUR --change
+
+# ASCII price chart
+price btc --graph d        # last 24 hours (hourly)
+price btc --graph w        # last 7 days
+price btc -g m             # last 30 days
+price btc -g y -c EUR      # last year in EUR
 
 # Output as JSON (combinable with other flags)
 price btc --json
