@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -12,21 +13,25 @@ import (
 const apiURL = "https://min-api.cryptocompare.com/data/price?fsym=%s&tsyms=%s"
 
 var (
-	version    = "v0.1.0"
+	version    = "v0.2.0"
 	httpClient = &http.Client{Timeout: 10 * time.Second}
 )
 
 func main() {
 	for _, arg := range os.Args[1:] {
-		if arg == "--version" || arg == "-v" || arg == "-version" {
+		switch arg {
+		case "--version", "-v", "-version":
 			fmt.Println("price", version)
+			return
+		case "--help", "-h", "-help":
+			printUsage(os.Stdout)
 			return
 		}
 	}
 
 	symbol, currency, ok := parseArgs(os.Args[1:])
 	if !ok {
-		printUsage()
+		printUsage(os.Stderr)
 		os.Exit(1)
 	}
 
@@ -60,6 +65,9 @@ func parseArgs(args []string) (string, string, bool) {
 		case "version", "v":
 			fmt.Println("price", version)
 			os.Exit(0)
+		case "help", "h":
+			printUsage(os.Stdout)
+			os.Exit(0)
 		case "currency", "c":
 			var val string
 			if hasInline {
@@ -89,17 +97,18 @@ func parseArgs(args []string) (string, string, bool) {
 	return strings.ToUpper(positional[0]), currency, true
 }
 
-func printUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: price [-c CODE | --currency CODE] <CRYPTO>")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Options:")
-	fmt.Fprintln(os.Stderr, "  -c, --currency CODE   currency code for the price (default: USD)")
-	fmt.Fprintln(os.Stderr, "  -v, --version         show version")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Examples:")
-	fmt.Fprintln(os.Stderr, "  price btc")
-	fmt.Fprintln(os.Stderr, "  price btc --currency EUR")
-	fmt.Fprintln(os.Stderr, "  price btc -c GBP")
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: price [-c CODE | --currency CODE] <CRYPTO>")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  -c, --currency CODE   currency code for the price (default: USD)")
+	fmt.Fprintln(w, "  -v, --version         show version")
+	fmt.Fprintln(w, "  -h, --help            show this help message")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, "  price btc")
+	fmt.Fprintln(w, "  price btc --currency EUR")
+	fmt.Fprintln(w, "  price btc -c GBP")
 }
 
 func fetchPrice(symbol, currency string) (float64, error) {

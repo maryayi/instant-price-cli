@@ -44,6 +44,8 @@ The symbol and currency code are both case-insensitive.
 | Flag | Shorthand | Default | Description |
 |------|-----------|---------|-------------|
 | `--currency` | `-c` | `USD` | Currency code to display the price in |
+| `--version` | `-v` | | Show version |
+| `--help` | `-h` | | Show help message |
 
 **Examples:**
 
@@ -57,6 +59,10 @@ price btc --currency EUR
 price btc -c GBP
 price --currency JPY eth
 price -c=CAD sol
+
+# Help and version
+price --help
+price --version
 ```
 
 ## Build from source
