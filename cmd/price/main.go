@@ -11,9 +11,19 @@ import (
 
 const apiURL = "https://min-api.cryptocompare.com/data/price?fsym=%s&tsyms=%s"
 
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+var (
+	version    = "v0.1.0"
+	httpClient = &http.Client{Timeout: 10 * time.Second}
+)
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-v" || arg == "-version" {
+			fmt.Println("price", version)
+			return
+		}
+	}
+
 	symbol, currency, ok := parseArgs(os.Args[1:])
 	if !ok {
 		printUsage()
@@ -47,6 +57,9 @@ func parseArgs(args []string) (string, string, bool) {
 		name, inlineVal, hasInline := strings.Cut(trimmed, "=")
 
 		switch name {
+		case "version", "v":
+			fmt.Println("price", version)
+			os.Exit(0)
 		case "currency", "c":
 			var val string
 			if hasInline {
@@ -81,6 +94,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Options:")
 	fmt.Fprintln(os.Stderr, "  -c, --currency CODE   currency code for the price (default: USD)")
+	fmt.Fprintln(os.Stderr, "  -v, --version         show version")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Examples:")
 	fmt.Fprintln(os.Stderr, "  price btc")
