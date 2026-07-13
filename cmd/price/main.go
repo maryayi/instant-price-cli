@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"time"
 )
+
+const apiKeyEnv = "APP_CONFIG_CRYPTO_COMPARE_API_KEY"
 
 const (
 	priceURL   = "https://min-api.cryptocompare.com/data/price?fsym=%s&tsyms=%s"
@@ -21,7 +24,13 @@ const (
 var (
 	version    = "v0.6.0"
 	httpClient = &http.Client{Timeout: 10 * time.Second}
+	apiKey     string
+	lastCall   time.Time
 )
+
+// minInterval spaces out API calls to respect CryptoCompare's free-tier limit
+// of one request per second. Commands like --change and --graph make two calls.
+const minInterval = 1100 * time.Millisecond
 
 type opts struct {
 	symbol      string
@@ -58,6 +67,8 @@ type histoPoint struct {
 }
 
 func main() {
+	loadAPIKey()
+
 	for _, arg := range os.Args[1:] {
 		switch arg {
 		case "--version", "-v", "-version":
@@ -237,20 +248,107 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  price btc --change --json")
 }
 
+// loadAPIKey reads the CryptoCompare API key from the environment, falling
+// back to a .env file in the current directory. An already-exported
+// environment variable takes precedence over the .env file.
+func loadAPIKey() {
+	if v := os.Getenv(apiKeyEnv); v != "" {
+		apiKey = v
+		return
+	}
+
+	f, err := os.Open(".env")
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(key) == apiKeyEnv {
+			val = strings.TrimSpace(val)
+			val = strings.Trim(val, `"'`)
+			apiKey = val
+			return
+		}
+	}
+}
+
+// apiGet performs a GET request against the CryptoCompare API, attaching the
+// API key as an Authorization header when one is configured.
+func apiGet(url string) (*http.Response, error) {
+	if wait := minInterval - time.Since(lastCall); !lastCall.IsZero() && wait > 0 {
+		time.Sleep(wait)
+	}
+	lastCall = time.Now()
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Apikey "+apiKey)
+	}
+	return httpClient.Do(req)
+}
+
+// statusError converts a non-200 response into a descriptive error.
+func statusError(code int) error {
+	if code == http.StatusUnauthorized {
+		if apiKey == "" {
+			return fmt.Errorf("API error (HTTP 401): CryptoCompare requires an API key. Set %s in your environment or a .env file", apiKeyEnv)
+		}
+		return fmt.Errorf("API error (HTTP 401): CryptoCompare rejected the API key. Check that %s is valid", apiKeyEnv)
+	}
+	return fmt.Errorf("API error (HTTP %d)", code)
+}
+
+// apiBodyError detects CryptoCompare error payloads returned with HTTP 200
+// (e.g. rate-limit messages) in the flat price response.
+func apiBodyError(raw map[string]json.RawMessage) error {
+	respRaw, ok := raw["Response"]
+	if !ok {
+		return nil
+	}
+	var response string
+	if json.Unmarshal(respRaw, &response) == nil && response == "Error" {
+		var msg string
+		json.Unmarshal(raw["Message"], &msg)
+		if msg == "" {
+			msg = "unknown API error"
+		}
+		return fmt.Errorf("API error: %s", msg)
+	}
+	return nil
+}
+
 func fetchPrice(symbol, currency string) (float64, error) {
-	resp, err := httpClient.Get(fmt.Sprintf(priceURL, symbol, currency))
+	resp, err := apiGet(fmt.Sprintf(priceURL, symbol, currency))
 	if err != nil {
 		return 0, fmt.Errorf("network request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("API error (HTTP %d)", resp.StatusCode)
+		return 0, statusError(resp.StatusCode)
 	}
 
 	var raw map[string]json.RawMessage
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return 0, fmt.Errorf("failed to parse API response: %w", err)
+	}
+
+	if err := apiBodyError(raw); err != nil {
+		return 0, err
 	}
 
 	if priceRaw, ok := raw[currency]; ok {
@@ -265,18 +363,19 @@ func fetchPrice(symbol, currency string) (float64, error) {
 }
 
 func fetchChanges(symbol, currency string, currentPrice float64) (changes, error) {
-	resp, err := httpClient.Get(fmt.Sprintf(historyURL, symbol, currency))
+	resp, err := apiGet(fmt.Sprintf(historyURL, symbol, currency))
 	if err != nil {
 		return changes{}, fmt.Errorf("network request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return changes{}, fmt.Errorf("API error (HTTP %d)", resp.StatusCode)
+		return changes{}, statusError(resp.StatusCode)
 	}
 
 	var result struct {
 		Response string `json:"Response"`
+		Message  string `json:"Message"`
 		Data     struct {
 			Data []struct {
 				Close float64 `json:"close"`
@@ -289,6 +388,9 @@ func fetchChanges(symbol, currency string, currentPrice float64) (changes, error
 	}
 
 	if result.Response != "Success" {
+		if result.Message != "" {
+			return changes{}, fmt.Errorf("API error: %s", result.Message)
+		}
 		return changes{}, fmt.Errorf("no history data available for %s/%s", symbol, currency)
 	}
 
@@ -323,18 +425,19 @@ func fetchHistory(symbol, currency, period string) ([]histoPoint, error) {
 		url = fmt.Sprintf("https://min-api.cryptocompare.com/data/v2/histoday?fsym=%s&tsym=%s&limit=365", symbol, currency)
 	}
 
-	resp, err := httpClient.Get(url)
+	resp, err := apiGet(url)
 	if err != nil {
 		return nil, fmt.Errorf("network request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error (HTTP %d)", resp.StatusCode)
+		return nil, statusError(resp.StatusCode)
 	}
 
 	var result struct {
 		Response string `json:"Response"`
+		Message  string `json:"Message"`
 		Data     struct {
 			Data []histoPoint `json:"Data"`
 		} `json:"Data"`
@@ -345,6 +448,9 @@ func fetchHistory(symbol, currency, period string) ([]histoPoint, error) {
 	}
 
 	if result.Response != "Success" {
+		if result.Message != "" {
+			return nil, fmt.Errorf("API error: %s", result.Message)
+		}
 		return nil, fmt.Errorf("no history data available for %s/%s", symbol, currency)
 	}
 
