@@ -53,6 +53,7 @@ $ price btc --change --json
 ## Requirements
 
 - Go 1.21 or later
+- A free [CryptoCompare API key](https://www.cryptocompare.com/cryptopian/api-keys) (see [API key](#api-key) below)
 
 ## Install
 
@@ -67,6 +68,39 @@ Make sure that directory is in your `$PATH`:
 # Add to ~/.bashrc or ~/.zshrc if not already there
 export PATH="$HOME/go/bin:$PATH"
 ```
+
+## API key
+
+CryptoCompare now requires an API key — unauthenticated requests are rejected
+with `HTTP 401`. Create a free key from your
+[CryptoCompare API keys page](https://www.cryptocompare.com/cryptopian/api-keys),
+then make it available to `price` in one of two ways.
+
+**Option 1 — environment variable:**
+
+```sh
+export APP_CONFIG_CRYPTO_COMPARE_API_KEY="your-api-key-here"
+```
+
+Add that line to your `~/.bashrc` or `~/.zshrc` to persist it across sessions.
+
+**Option 2 — `.env` file:**
+
+Create a `.env` file in the directory you run `price` from:
+
+```sh
+APP_CONFIG_CRYPTO_COMPARE_API_KEY=your-api-key-here
+```
+
+If both are set, the environment variable takes precedence. Keep your key out
+of version control — `.env` is already listed in `.gitignore`.
+
+### Rate limits
+
+The free tier is capped at roughly **1 request/second, 10/minute, and
+100/day**. Commands that make two calls (`--change`, `--graph`) are paced
+automatically to stay within the per-second limit. If you exceed a limit, the
+API returns a clear `over your rate limit` error.
 
 ## Usage
 
@@ -139,7 +173,8 @@ mv price /usr/local/bin/
 
 ## Data source
 
-Prices are fetched live from [CryptoCompare](https://www.cryptocompare.com/), a free public API — no account or API key required.
+Prices are fetched live from [CryptoCompare](https://www.cryptocompare.com/).
+A free API key is required — see [API key](#api-key) above.
 
 ## License
 
