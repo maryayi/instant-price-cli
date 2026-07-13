@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	version    = "v0.6.0"
+	version    = "v0.7.0"
 	httpClient = &http.Client{Timeout: 10 * time.Second}
 	apiKey     string
 	lastCall   time.Time
